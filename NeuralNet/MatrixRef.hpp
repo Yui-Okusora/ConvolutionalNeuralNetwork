@@ -14,7 +14,7 @@ public:
     double getMax();
     void setOrigin(unsigned rows, unsigned cols){orig_rows = rows; orig_cols = cols;}
     MatrixRef move(unsigned row, unsigned col);
-    
+    void print();
     /*Matrix add(Matrix b);
     Matrix add(double b);
     Matrix subtr(Matrix b);
@@ -31,6 +31,18 @@ private:
     unsigned start_col = 0;
     unsigned start_row = 0;
 };
+
+void MatrixRef::print()
+{
+    for(unsigned i = 0; i < n_rows; ++i)
+    {
+        for(unsigned j = 0; j < n_columns; ++j)
+        {
+            cout << getValue(i, j) << " ";
+        }
+        cout << endl;
+    }
+}
 
 MatrixRef MatrixRef::move(unsigned row, unsigned col)
 {

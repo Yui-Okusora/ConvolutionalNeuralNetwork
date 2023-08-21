@@ -28,7 +28,7 @@ public:
     Matrix dot(Matrix &b);
     Matrix multiply(Matrix &b);
     Matrix multiply(double x);
-    Matrix addPadding(unsigned numPadding);
+    Matrix addPadding(unsigned paddingThickness, unsigned top, unsigned bot, unsigned left, unsigned right);
     Matrix correlate(Matrix &kernel, unsigned padding, unsigned stride);
     Matrix pool(unsigned size, unsigned padding, unsigned stride);
     MatrixRef submat(unsigned startRow, unsigned startCol, unsigned rowSize, unsigned colSize);
@@ -187,14 +187,15 @@ Matrix Matrix::dot(Matrix &b)
     return tmp;
 }
 
-Matrix Matrix::addPadding(unsigned numPadding)
+Matrix Matrix::addPadding(unsigned paddingThickness = 0, unsigned top = 1, unsigned bot = 1, unsigned left = 1, unsigned right = 1)
 {
-    Matrix tmp(n_rows + 2 * numPadding, n_columns + 2 * numPadding);
-    for(unsigned i = 0; i < n_rows; ++i)
+    Matrix tmp(n_rows + (top + bot) * paddingThickness, n_columns + (left + right) * paddingThickness);
+    for(unsigned i = top * paddingThickness; i < n_rows + top * paddingThickness; ++i)
     {
-        for(unsigned j = 0; j < n_columns; ++j)
+        for(unsigned j = left * paddingThickness; j < n_columns + left * paddingThickness; ++j)
         {
-            tmp.getValue(i + numPadding, j + numPadding) = getValue(i, j);
+            double tmp2 = getValue(i - top * paddingThickness, j - left * paddingThickness);
+            tmp.getValue(i, j) = tmp2;
         }
     }
     return tmp;
@@ -222,27 +223,21 @@ Matrix Matrix::correlate(Matrix &kernel, unsigned padding, unsigned stride)
         }
         
     }
-    /*MatrixRef ptr = tmp.submat(0, 0, kernel.n_rows, kernel.n_columns);
-    for(unsigned i = 0; i < out.getRows(); ++i)
-    {
-        for(unsigned j = 0; j < out.getCols(); ++j)
-        {
-            out.getValue(i, j) = *ptr.move(i, j);
-        }
-    }*/
     return out;
 }
 
 Matrix Matrix::pool(unsigned size, unsigned padding, unsigned stride)
 {
-    Matrix tmp = addPadding(padding);
+    Matrix tmp = addPadding(1, 0, n_rows % 2, 0, n_columns % 2);
+    if(padding != 0) tmp = addPadding(padding);
     Matrix out(ceil((tmp.n_rows - size + 1) / (double)stride), ceil((tmp.n_columns - size + 1) / (double)stride));
     MatrixRef ptr = tmp.submat(0, 0, 2, 2);
     for(unsigned i = 0; i < out.getRows(); ++i)
     {
         for(unsigned j = 0; j < out.getCols(); ++j)
         {
-            out.getValue(i, j) = ptr.move(i, j).getMax();
+            out.getValue(i, j) = ptr.move(i * stride, j * stride).getMax();
+
         }
     }
     return out;
