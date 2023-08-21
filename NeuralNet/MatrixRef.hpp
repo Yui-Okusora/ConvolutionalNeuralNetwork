@@ -1,7 +1,8 @@
 #pragma once
 #include "HeaderLibs.hpp"
-#include "Matrix.hpp"
+
 using namespace std;
+
 
 class MatrixRef
 {
@@ -13,15 +14,7 @@ public:
     double getMax();
     void setOrigin(unsigned rows, unsigned cols){orig_rows = rows; orig_cols = cols;}
     MatrixRef move(unsigned row, unsigned col);
-    const Matrix& operator*()
-    {
-        vector<double> tmp;
-        for(unsigned i = 0; i < m_refs.size(); ++i)
-        {
-            tmp.push_back(*m_refs[i]);
-        }
-        return Matrix(tmp, n_rows, n_columns);
-    }
+    
     /*Matrix add(Matrix b);
     Matrix add(double b);
     Matrix subtr(Matrix b);
