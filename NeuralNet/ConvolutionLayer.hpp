@@ -78,7 +78,7 @@ Tensor ConvolutionalLayer::calcInputGradients(vector<Tensor> nextKernels, Tensor
 		Matrix sum(m_outputVal[0].getRows(), m_outputVal[0].getCols());
 		for(unsigned kernelNum = 0; kernelNum < kernelsNum; ++kernelNum)
 		{
-			Matrix tmp = nextGradients[kernelNum].correlate(nextKernels[kernelNum][depth].rot180(), 1, nextStride);
+			Matrix tmp = nextGradients[kernelNum].correlate(nextKernels[kernelNum][depth].rot180(), padding + 1, nextStride);
 			sum = sum.add(tmp);
 		}
 		Matrix activeFuncDeriv(m_outputVal[depth]);
