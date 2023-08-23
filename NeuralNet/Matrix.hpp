@@ -21,15 +21,16 @@ public:
     void copyVals(const Matrix &b);
     Matrix setRandomVals(double randVal(void));
     Matrix setMatrixVal(double x);
-    Matrix add(Matrix &b);
+    Matrix add(Matrix b);
     Matrix add(double &b);
-    Matrix subtr(Matrix &b);
+    Matrix subtr(Matrix b);
     Matrix transpose();
-    Matrix dot(Matrix &b);
-    Matrix multiply(Matrix &b);
+    Matrix dot(Matrix b);
+    Matrix multiply(Matrix b);
+    Matrix multiply(MatrixRef b);
     Matrix multiply(double x);
     Matrix addPadding(unsigned paddingThickness, unsigned top, unsigned bot, unsigned left, unsigned right);
-    Matrix correlate(Matrix &kernel, unsigned padding, unsigned stride);
+    Matrix correlate(Matrix kernel, unsigned padding, unsigned stride);
     Matrix pool(unsigned size, unsigned padding, unsigned stride);
     MatrixRef submat(unsigned startRow, unsigned startCol, unsigned rowSize, unsigned colSize);
     Matrix rot180();
@@ -92,7 +93,7 @@ Matrix Matrix::setMatrixVal(double x)
     return tmp;
 }
 
-Matrix Matrix::add(Matrix &b)
+Matrix Matrix::add(Matrix b)
 {
     assert(n_rows == b.n_rows);
     assert(n_columns == b.n_columns);
@@ -120,7 +121,7 @@ Matrix Matrix::add(double &b)
     return tmp;
 }
 
-Matrix Matrix::subtr(Matrix &b)
+Matrix Matrix::subtr(Matrix b)
 {
     assert(n_rows == b.n_rows);
     assert(n_columns == b.n_columns);
@@ -159,7 +160,7 @@ Matrix Matrix::multiply(double x)
     return tmp;
 }
 
-Matrix Matrix::multiply(Matrix &b)
+Matrix Matrix::multiply(Matrix b)
 {
     assert(n_rows == b.n_rows);
     assert(n_columns == b.n_columns);
@@ -172,7 +173,20 @@ Matrix Matrix::multiply(Matrix &b)
     return tmp;
 }
 
-Matrix Matrix::dot(Matrix &b)
+Matrix Matrix::multiply(MatrixRef b)
+{
+    assert(n_rows == b.getRows());
+    assert(n_columns == b.getCols());
+    Matrix tmp(n_rows, n_columns);
+    for(unsigned i = 0; i < n_rows; ++i)
+    {
+        for(unsigned j = 0; j < n_columns; ++j)
+        tmp.getValue(i, j) = getValue(i, j) * b.getValue(i, j);
+    }
+    return tmp;
+}
+
+Matrix Matrix::dot(Matrix b)
 {
     assert(n_columns == b.n_rows);
     Matrix tmp(n_rows, b.n_columns);
@@ -201,7 +215,7 @@ Matrix Matrix::addPadding(unsigned paddingThickness = 0, unsigned top = 1, unsig
     return tmp;
 }
 
-Matrix Matrix::correlate(Matrix &kernel, unsigned padding, unsigned stride)
+Matrix Matrix::correlate(Matrix kernel, unsigned padding, unsigned stride)
 {
     assert(kernel.n_columns == kernel.n_rows);
     Matrix tmp = addPadding(padding);

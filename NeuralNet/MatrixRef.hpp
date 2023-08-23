@@ -12,6 +12,8 @@ public:
     double* &getPointerRef(unsigned row, unsigned col);
     double &getValue(unsigned row, unsigned col){return *getPointerRef(row, col);}
     double getMax();
+    unsigned &getCols(){return n_columns;}
+    unsigned &getRows(){return n_rows;}
     void setOrigin(unsigned rows, unsigned cols){orig_rows = rows; orig_cols = cols;}
     MatrixRef move(unsigned row, unsigned col);
     void print();

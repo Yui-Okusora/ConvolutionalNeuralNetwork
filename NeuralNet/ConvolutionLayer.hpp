@@ -1,5 +1,6 @@
 #pragma once
 #include "HeaderLibs.hpp"
+#include "Tensor.hpp"
 using namespace std;
 
 class ConvolutionalLayer;
@@ -10,8 +11,8 @@ class ConvolutionalLayer
 {
 public:
 	ConvolutionalLayer();
-	ConvolutionalLayer(unsigned InpHeight, unsigned InpWidth, unsigned ChannelsNum, unsigned KernelsNum, unsigned kernelSize, ActivationType Activation);
-    //void setOutputVal(unsigned channel, double val) { m_outputVal[channel].setMatrixVal(val); }
+	ConvolutionalLayer(unsigned InpHeight, unsigned InpWidth, unsigned InpDepth, unsigned OutNum, unsigned kernelSize, ActivationType Activation);
+    //void setOutputVal(unsigned depth, double val) { m_outputVal[depth].setMatrixVal(val); }
 	//Tensor getOutputVal(void) const { return m_outputVal; }
 	//void calcOutputGradients(Matrix targetVals);
     Tensor calcInputGradients(vector<Tensor> nextKernels, Tensor nextGradients, unsigned nextStride);
@@ -38,7 +39,7 @@ private:
 	Tensor m_gradients;
     unsigned stride = 1;
     unsigned padding = 1;
-	unsigned channels; // j
+	unsigned n_depth; // j
 	unsigned kernelsNum; // i
 	unsigned inpHeight;
 	unsigned inpWidth;
@@ -58,12 +59,12 @@ void ConvolutionalLayer::updateInpKernels(Tensor prevOutputVals)
 		Matrix oldDeltaBiases = deltaBiases[kernelNum];
 		Matrix newDeltaBiases = biasesGradients. multiply( eta ). add( oldDeltaBiases. multiply( alpha ) );
 		bias.copyVals(bias.add(newDeltaBiases));
-		for(unsigned channel = 0; channel < channels; ++channel)
+		for(unsigned depth = 0; depth < n_depth; ++depth)
 		{
-			Matrix &kernel = kernels[kernelNum][channel];
-			Matrix input = prevOutputVals[channel];
+			Matrix &kernel = kernels[kernelNum][depth];
+			Matrix input = prevOutputVals[depth];
 			Matrix kernelsGradients = input.correlate(biasesGradients, padding, stride);
-			Matrix oldDeltaKernels = deltaKernels[kernelNum][channel];
+			Matrix oldDeltaKernels = deltaKernels[kernelNum][depth];
 			Matrix newDeltaKernels = kernelsGradients. multiply( eta ). add( oldDeltaKernels. multiply( alpha ) );
 			kernel.copyVals(kernel.add(newDeltaKernels));
 		}
@@ -72,29 +73,29 @@ void ConvolutionalLayer::updateInpKernels(Tensor prevOutputVals)
 
 Tensor ConvolutionalLayer::calcInputGradients(vector<Tensor> nextKernels, Tensor nextGradients, unsigned nextStride)
 {
-	for(unsigned channel = 0; channel < channels; ++channel)
+	for(unsigned depth = 0; depth < n_depth; ++depth)
 	{
 		Matrix sum(m_outputVal[0].getRows(), m_outputVal[0].getCols());
 		for(unsigned kernelNum = 0; kernelNum < kernelsNum; ++kernelNum)
 		{
-			Matrix tmp = nextGradients[kernelNum].correlate(nextKernels[kernelNum][channel].rot180(), 1, nextStride);
+			Matrix tmp = nextGradients[kernelNum].correlate(nextKernels[kernelNum][depth].rot180(), 1, nextStride);
 			sum = sum.add(tmp);
 		}
-		Matrix activeFuncDeriv(m_outputVal[channel]);
+		Matrix activeFuncDeriv(m_outputVal[depth]);
 		for(unsigned i = 0; i < activeFuncDeriv.getFlatted().size(); ++i)
 		{
 			double &tmp = activeFuncDeriv.getFlatted()[i];
 			tmp = activationFunctionDerivative(tmp);
 		}
 
-		m_gradients[channel] = sum.multiply(activeFuncDeriv);
+		m_gradients[depth] = sum.multiply(activeFuncDeriv);
 	}
 	return m_gradients;
 }
 
 Tensor ConvolutionalLayer::feedForward(Tensor &input)
 {
-	assert(input.size() == channels);
+	assert(input.size() == n_depth);
 	assert(input[0].getCols() == inpWidth);
 	assert(input[0].getRows() == inpHeight);
 	m_inputVal = input;
@@ -104,13 +105,15 @@ Tensor ConvolutionalLayer::feedForward(Tensor &input)
 		//Zi = Bi
 		Matrix sum(biases[kernelNum]);
 		
-		//Zi = Bi + sum(Xj corr Kij)
+		/*//Zi = Bi + sum(Xj corr Kij)
 		for(unsigned depth = 0; depth < channels; ++depth)
 		{
 			Matrix output = m_inputVal[depth];
 			Matrix tmp = output.correlate(kernel[depth], padding, stride);
 			sum.copyVals( sum.add( tmp ) );
-		}
+		}*/
+
+		sum = sum.add(m_inputVal.correlation(kernel, padding, stride));
 
 		//Yi = activate(Zi)
 		for(unsigned i = 0; i < sum.getFlatted().size(); ++i)
@@ -125,22 +128,24 @@ Tensor ConvolutionalLayer::feedForward(Tensor &input)
 	return m_outputVal;
 }
 
-ConvolutionalLayer::ConvolutionalLayer(unsigned InpHeight, unsigned InpWidth, unsigned ChannelsNum, unsigned KernelsNum, unsigned KernelSize, ActivationType Activation)
+ConvolutionalLayer::ConvolutionalLayer(unsigned InpHeight, unsigned InpWidth, unsigned InpDepth, unsigned OutNum, unsigned KernelSize, ActivationType Activation)
 {
 	assert(Activation != ActivationType::SoftMax);
 	activationType = Activation;
-	channels = ChannelsNum;
-	kernelsNum = KernelsNum;
+	n_depth = InpDepth;
+	kernelsNum = OutNum;
 	inpHeight = InpHeight;
 	inpWidth = InpWidth;
 	createKernel(KernelSize);
 	Matrix tmp((InpHeight - KernelSize + 2 * padding) / stride + 1, (InpWidth - KernelSize + 2 * padding) / stride + 1);
-	for(unsigned outputDepth = 0; outputDepth < kernelsNum; ++outputDepth)
+
+	m_gradients = Tensor(OutNum, tmp);
+	m_outputVal = m_gradients;
+	deltaBiases = m_gradients;
+	biases = m_gradients;
+	for(unsigned outputDepth = 0; outputDepth < OutNum; ++outputDepth)
 	{
-		m_gradients.push_back(tmp);
-		m_outputVal.push_back(tmp);
-		deltaBiases.push_back(tmp);
-		biases.push_back(tmp.setRandomVals(randomWeight));
+		biases[outputDepth] = tmp.setRandomVals(randomWeight);
 	}
 }
 
@@ -153,8 +158,8 @@ void ConvolutionalLayer::createKernel(unsigned size)
 {
 	for(unsigned kernelNum = 0; kernelNum < kernelsNum; ++kernelNum)
 	{
-		deltaKernels.push_back(Tensor(channels, Matrix(size, size)));
-		kernels.push_back(Tensor(channels, Matrix(size, size).setRandomVals(randomWeight)));
+		deltaKernels.push_back(Tensor(n_depth, Matrix(size, size)));
+		kernels.push_back(Tensor(n_depth, Matrix(size, size).setRandomVals(randomWeight)));
 	}
 }
 
