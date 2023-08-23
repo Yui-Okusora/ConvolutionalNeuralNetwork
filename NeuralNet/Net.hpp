@@ -103,11 +103,16 @@ void Net::feedForward(Tensor inputVals)
 {
     m_inputVals = inputVals;
     Tensor output = layer1.feedForward(inputVals);
+    cout<<"Layer 1 passed"<<endl;
     output = layer2.feedForward(output);
+    cout<<"Layer 2 passed"<<endl;
     output = layer3.feedForward(output);
+    cout<<"Layer 3 passed"<<endl;
     Matrix output2 = flatten(output);
     output2 = layer4.feedForward(output2);
+    cout<<"Layer 4 passed"<<endl;
     output2 = layer5.feedForward(output2);
+    cout<<"Layer 5 passed"<<endl;
     m_outputVals = output2;
 }
 

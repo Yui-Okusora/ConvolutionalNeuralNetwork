@@ -5,7 +5,7 @@ using namespace std;
 
 class Matrix;
 
-typedef vector<Matrix> Tensor;
+//typedef vector<Matrix> Tensor;
 
 class Matrix
 {
