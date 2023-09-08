@@ -31,7 +31,7 @@ double getLabel(Matrix a)
 int main()
 {
 	Net mynet;
-	auto mnist_data = mnist::read_dataset<vector, vector, double, uint8_t>(100, 5);
+	auto mnist_data = mnist::read_dataset<vector, vector, double, uint8_t>(10000, 5);
 	for(unsigned epoch = 0; epoch < mnist_data.training_images.size(); ++epoch)
 	{
 		Matrix input(mnist_data.training_images[epoch],28, 28);

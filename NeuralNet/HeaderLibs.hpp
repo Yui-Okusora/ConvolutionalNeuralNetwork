@@ -10,7 +10,6 @@
 #include <iomanip>
 #include <limits>
 #include <algorithm>
-#include "Matrix.hpp"
 
 enum ActivationType
 {

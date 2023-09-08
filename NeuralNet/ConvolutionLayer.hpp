@@ -12,9 +12,6 @@ class ConvolutionalLayer
 public:
 	ConvolutionalLayer();
 	ConvolutionalLayer(unsigned InpHeight, unsigned InpWidth, unsigned InpDepth, unsigned OutNum, unsigned kernelSize, ActivationType Activation);
-    //void setOutputVal(unsigned depth, double val) { m_outputVal[depth].setMatrixVal(val); }
-	//Tensor getOutputVal(void) const { return m_outputVal; }
-	//void calcOutputGradients(Matrix targetVals);
     Tensor calcInputGradients(vector<Tensor> nextKernels, Tensor nextGradients, unsigned nextStride);
 	Tensor feedForward(Tensor &input);
 	vector<Tensor> getKernels() {return kernels;}
@@ -29,7 +26,7 @@ private:
 	double activationFunction(double x);
 	double activationFunctionDerivative(double x);
 	static double sigmoid(double x);
-	static double randomWeight(void) { return rand() / double(RAND_MAX / 1.5); }
+	static double randomWeight(void) { return rand() / double(RAND_MAX); }
     Tensor m_outputVal;
 	Tensor m_inputVal;
     vector<Tensor> kernels;
@@ -46,7 +43,7 @@ private:
 	ActivationType activationType;
 };
 
-double ConvolutionalLayer::eta = 0.155;
+double ConvolutionalLayer::eta = 0.15;
 double ConvolutionalLayer::alpha = 0.5;
 double ConvolutionalLayer::reluParam = 0.1;
 
@@ -78,9 +75,10 @@ Tensor ConvolutionalLayer::calcInputGradients(vector<Tensor> nextKernels, Tensor
 		Matrix sum(m_outputVal[0].getRows(), m_outputVal[0].getCols());
 		for(unsigned kernelNum = 0; kernelNum < kernelsNum; ++kernelNum)
 		{
-			Matrix tmp = nextGradients[kernelNum].correlate(nextKernels[kernelNum][depth].rot180(), padding + 1, nextStride);
+			Matrix tmp = nextGradients[kernelNum].convolute(nextKernels[kernelNum][depth], padding, nextStride);
 			sum = sum.add(tmp);
 		}
+
 		Matrix activeFuncDeriv(m_outputVal[depth]);
 		for(unsigned i = 0; i < activeFuncDeriv.getFlatted().size(); ++i)
 		{
@@ -99,21 +97,14 @@ Tensor ConvolutionalLayer::feedForward(Tensor &input)
 	assert(input[0].getCols() == inpWidth);
 	assert(input[0].getRows() == inpHeight);
 	m_inputVal = input;
+	m_inputVal = m_inputVal.addPadding(padding);
 	for(unsigned kernelNum = 0; kernelNum < kernels.size(); ++kernelNum)
 	{
 		Tensor kernel = kernels[kernelNum];
 		//Zi = Bi
 		Matrix sum(biases[kernelNum]);
-		
-		/*//Zi = Bi + sum(Xj corr Kij)
-		for(unsigned depth = 0; depth < channels; ++depth)
-		{
-			Matrix output = m_inputVal[depth];
-			Matrix tmp = output.correlate(kernel[depth], padding, stride);
-			sum.copyVals( sum.add( tmp ) );
-		}*/
 
-		sum = sum.add(m_inputVal.correlation(kernel, padding, stride));
+		sum = sum.add(input.correlate(kernel, padding, stride));
 
 		//Yi = activate(Zi)
 		for(unsigned i = 0; i < sum.getFlatted().size(); ++i)
@@ -122,7 +113,9 @@ Tensor ConvolutionalLayer::feedForward(Tensor &input)
 			tmp = activationFunction(tmp);
 		}
 
-		m_outputVal[kernelNum].copyVals(sum);
+		assert(m_outputVal[kernelNum].getCols() == sum.getCols());
+		assert(m_outputVal[kernelNum].getRows() == sum.getRows());
+		m_outputVal[kernelNum] = sum;
 	}
 	
 	return m_outputVal;

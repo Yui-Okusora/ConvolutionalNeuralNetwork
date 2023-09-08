@@ -1,5 +1,5 @@
 #pragma once
-#include "HeaderLibs.hpp"
+#include "Matrix.hpp"
 
 class FullyConnLayer
 {
@@ -24,8 +24,8 @@ private:
 	double activationFunctionDerivative(double x);
     double softmax(double x);
 	static double sigmoid(double x);
-	static double randomWeight(void) { return rand() / double(RAND_MAX / 1.5); }
-    double sumE_z = 1.0;
+	static double randomWeight(void) { return rand() / double(RAND_MAX); }
+    double sumE_z = 0.0;
     Matrix m_outputVal;
     Matrix weights;
     Matrix deltaWeights;
@@ -33,7 +33,7 @@ private:
     ActivationType activationType;
 };
 
-double FullyConnLayer::eta = 0.155; // overall net learning rate
+double FullyConnLayer::eta = 0.15; // overall net learning rate
 double FullyConnLayer::alpha = 0.5; // momentum, multiplier of last deltaWeight, [0.0..n]
 double FullyConnLayer::reluParam = 0.01;
 
@@ -76,7 +76,7 @@ void FullyConnLayer::calcOutputGradients(Matrix targetVals)
 {
     for(unsigned i = 0; i < m_outputVal.getCols(); ++i)
     {
-        double delta = -(((1.0 - targetVals.getValue(0, i)) / (1.0 - m_outputVal.getValue(0, i))) + (targetVals.getValue(0, i) / m_outputVal.getValue(0, i)));// / targetVals.getFlatted().size();
+        double delta = targetVals.getValue(0, i) - m_outputVal.getValue(0, i);
         m_gradients.getValue(0, i) = delta * activationFunctionDerivative(m_outputVal.getValue(0, i));
     }
 }
@@ -175,8 +175,6 @@ double FullyConnLayer::activationFunctionDerivative(double x)
 		break;
 	case ActivationType::Sigmoid:
 		{
-			//double sig = sigmoid(x);
-			//return sig * (1.0 - sig);
             return x * (1.0 - x);
 		}
 		break;

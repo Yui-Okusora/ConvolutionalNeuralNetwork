@@ -51,7 +51,7 @@ void Net::calcError(Matrix targetVals)
     m_error = 0.0;
     for(unsigned n = 0; n < m_outputVals.getCols(); ++n)
 	{
-		double delta = -1.0 * (targetVals.getValue(0, n) * log(m_outputVals.getValue(0, n)) + (1.0 - targetVals.getValue(0, n)) * log(1.0 - m_outputVals.getValue(0, n)));
+		double delta = -(targetVals.getValue(0, n) * log(m_outputVals.getValue(0, n)) + (1.0 - targetVals.getValue(0, n)) * log(1.0 - m_outputVals.getValue(0, n)));
 		m_error += delta;// *delta;
 	}
 	m_error /= m_outputVals.getCols();
@@ -103,16 +103,11 @@ void Net::feedForward(Tensor inputVals)
 {
     m_inputVals = inputVals;
     Tensor output = layer1.feedForward(inputVals);
-    cout<<"Layer 1 passed"<<endl;
     output = layer2.feedForward(output);
-    cout<<"Layer 2 passed"<<endl;
     output = layer3.feedForward(output);
-    cout<<"Layer 3 passed"<<endl;
     Matrix output2 = flatten(output);
     output2 = layer4.feedForward(output2);
-    cout<<"Layer 4 passed"<<endl;
     output2 = layer5.feedForward(output2);
-    cout<<"Layer 5 passed"<<endl;
     m_outputVals = output2;
 }
 
@@ -120,8 +115,7 @@ void Net::backProp(Matrix targetVals)
 {
     layer5.calcOutputGradients(targetVals);
     layer4.calcHiddenGradients(layer5.getInputWeights(), layer5.getInputGradients());
-    layer3.calcPoolingGradient(layer3.Matrix2Tensor(layer4.getInputGradients()));
-    //layer2.calcInputGradients(layer3.getKernels(), layer3.getInputGradient(), 2);
+    layer3.calcPoolingGradient(layer4.getInputWeights(), layer4.getInputGradients());
     layer2.getInputGradients() = layer3.getInputGradient();
     layer1.calcInputGradients(layer2.getKernels(), layer2.getInputGradients(), 1);
 

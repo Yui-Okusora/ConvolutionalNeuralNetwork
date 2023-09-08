@@ -1,12 +1,6 @@
 #pragma once
-#include "HeaderLibs.hpp"
 #include "MatrixRef.hpp"
 using namespace std;
-
-class Matrix;
-
-//typedef vector<Matrix> Tensor;
-
 class Matrix
 {
 public:
@@ -31,6 +25,7 @@ public:
     Matrix multiply(double x);
     Matrix addPadding(unsigned paddingThickness, unsigned top, unsigned bot, unsigned left, unsigned right);
     Matrix correlate(Matrix kernel, unsigned padding, unsigned stride);
+    Matrix convolute(Matrix kernel, unsigned padding, unsigned stride);
     Matrix pool(unsigned size, unsigned padding, unsigned stride);
     MatrixRef submat(unsigned startRow, unsigned startCol, unsigned rowSize, unsigned colSize);
     Matrix rot180();
@@ -240,6 +235,12 @@ Matrix Matrix::correlate(Matrix kernel, unsigned padding, unsigned stride)
     return out;
 }
 
+Matrix Matrix::convolute(Matrix kernel, unsigned padding, unsigned stride)
+{
+    kernel = kernel.rot180();
+    return correlate(kernel, padding, stride);
+}
+
 Matrix Matrix::pool(unsigned size, unsigned padding, unsigned stride)
 {
     Matrix tmp = addPadding(1, 0, n_rows % 2, 0, n_columns % 2);
@@ -292,7 +293,6 @@ void Matrix::print()
 {
     for(unsigned i = 0; i < n_rows; ++i)
     {
-        //cout ;
         for(unsigned j = 0; j < n_columns; ++j)
         cout << setw(3) << m_values[n_rows * i + j] << " ";
         cout << endl;

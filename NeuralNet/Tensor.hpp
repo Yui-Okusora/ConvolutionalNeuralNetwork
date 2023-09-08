@@ -1,16 +1,16 @@
 #pragma once
 #include "Matrix.hpp"
-using namespace std;
 
+using namespace std;
 class Tensor
 {
 public:
     Tensor(){}
     Tensor(unsigned depth, Matrix _n);
     Tensor(unsigned rows, unsigned cols, unsigned depth);
-    Matrix correlation(Tensor &kernels, unsigned padding, unsigned stride);
+    Matrix correlate(Tensor &kernels, unsigned padding, unsigned stride);
     Tensor addPadding(unsigned paddingThickness, unsigned top, unsigned bot, unsigned left, unsigned right);
-    Matrix &operator[](size_t index){ return m_values[index];}
+    Matrix &operator[](size_t index){ assert(index < n_depth); return m_values[index];}
     size_t size(){return m_values.size();}
 private:
     vector<Matrix> m_values;
@@ -22,6 +22,8 @@ private:
 Tensor Tensor::addPadding(unsigned paddingThickness, unsigned top = 1, unsigned bot = 1, unsigned left = 1, unsigned right = 1)
 {
     Tensor tmp = *this;
+    tmp.n_rows += (top + bot) * paddingThickness;
+    tmp.n_columns += (left + right) * paddingThickness;
     for(unsigned i = 0; i < n_depth; ++i)
     {
         tmp[i] = tmp[i].addPadding(paddingThickness, top, bot, left, right);
@@ -29,29 +31,16 @@ Tensor Tensor::addPadding(unsigned paddingThickness, unsigned top = 1, unsigned 
     return tmp;
 }
 
-Matrix Tensor::correlation(Tensor &kernels, unsigned padding, unsigned stride)
+Matrix Tensor::correlate(Tensor &kernels, unsigned padding, unsigned stride)
 {
-    Tensor inp = addPadding(padding);
-    Matrix out((inp.n_rows - kernels.n_rows + 2 * padding) / stride - 1, (inp.n_columns - kernels.n_columns + 2 * padding) / stride - 1);
-    vector<MatrixRef> subMatPtr;
-    subMatPtr.reserve(n_depth);
+    assert(kernels.n_columns == kernels.n_rows);
+    assert(n_depth == kernels.n_depth);
+    Tensor inp = *this;
+    Matrix out((inp.n_rows - kernels.n_rows + 4 * padding) / stride - 1, (inp.n_columns - kernels.n_columns + 4 * padding) / stride - 1);
     for(unsigned i = 0; i < n_depth; ++i)
     {
-        subMatPtr[i] = inp[i].submat(0, 0, kernels.n_rows, kernels.n_columns);
-    }
-
-    for(unsigned i = 0; i <= inp.n_rows - kernels.n_rows; i += stride)
-    {
-        for(unsigned j = 0; j <= inp.n_rows - kernels.n_rows; j += stride)
-        {
-            double sum = 0;
-            for(unsigned k = 0; k < n_depth; ++k)
-            {
-                MatrixRef tmp = subMatPtr[k].move(i, j);
-                sum += kernels[k].multiply(tmp).sum();
-            }
-            out.getValue(i / stride, j / stride) = sum;
-        }
+        Matrix tmp = inp[i].correlate(kernels[i], padding, stride);
+        out = out.add(tmp);
     }
     return out;
 }
