@@ -6,109 +6,97 @@ class FullyConnLayer
 public:
     FullyConnLayer();
     FullyConnLayer(unsigned inpNeuronNum, unsigned neuronNum, ActivationType activation);
-    Matrix& getOutputVals() {return m_outputVal;}
-    Matrix &getInputWeights() {return weights;}
-    Matrix &getInputGradients() {return m_gradients;}
     Matrix feedForward(Matrix input);
-    void calcOutputGradients(Matrix targetVals);
-    void calcHiddenGradients(Matrix &nextWeights, Matrix &nextGradients);
-    void updateInpWeights(Matrix prevOutputVals);
-    unsigned getInputsNum() {return weights.getRows() - 1;}
-private:
-    void createWeights(unsigned inpSize);
-    double sumDerivativeOWeight(unsigned j, Matrix &nextWeights, Matrix &nextGradients);
+    Matrix backward(Matrix outputGradient);
+    Matrix calcOutputGradients(Matrix targetVals);
+    friend ofstream &operator<<(ofstream &out, FullyConnLayer &a);
+    friend ifstream &operator>>(ifstream &in, FullyConnLayer &a);
     static double eta; // [0.0...1.0] overall net training rate
 	static double alpha; // [0.0...n] multiplier of last weight change [momentum]
 	static double reluParam;
+private:
+    void createWeights(unsigned inpSize);
+    double sumDerivativeOWeight(unsigned j, Matrix &nextWeights, Matrix &nextGradients);
 	double activationFunction(double x);
 	double activationFunctionDerivative(double x);
     double softmax(double x);
 	static double sigmoid(double x);
-	static double randomWeight(void) { return rand() / double(RAND_MAX); }
+	static double randomWeight(void) { return rand() / double(RAND_MAX)/ 1.0; }
     double sumE_z = 0.0;
-    Matrix m_outputVal;
+    double maxC;
+    Matrix m_output;
+    Matrix m_input;
     Matrix weights;
     Matrix deltaWeights;
     Matrix m_gradients;
     ActivationType activationType;
 };
 
-double FullyConnLayer::eta = 0.15; // overall net learning rate
-double FullyConnLayer::alpha = 0.5; // momentum, multiplier of last deltaWeight, [0.0..n]
+double FullyConnLayer::eta = 0.13887; // overall net learning rate
+double FullyConnLayer::alpha = 0; // momentum, multiplier of last deltaWeight, [0.0..n]
 double FullyConnLayer::reluParam = 0.01;
 
-void FullyConnLayer::updateInpWeights(Matrix prevOutputVals)
+Matrix FullyConnLayer::calcOutputGradients(Matrix targetVals)
 {
-    prevOutputVals.getFlatted().push_back(1.0);
-    prevOutputVals.getCols() += 1;
-    for(unsigned i = 0; i < weights.getCols(); ++i)
+
+    for(unsigned i = 0; i < m_output.getCols(); ++i)
     {
-        for(unsigned j = 0; j < weights.getRows(); ++j)
+        double delta = m_output.getValue(0, i) - targetVals.getValue(0, i);
+        m_gradients.getValue(0, i) = delta * activationFunctionDerivative(m_output.getValue(0, i));
+    }
+    return backward(m_gradients);
+}
+
+Matrix FullyConnLayer::backward(Matrix outputGradient)
+{
+    Matrix weight_gradient(weights.getRows(), weights.getCols());
+    Matrix input_gradient(m_input.getRows(), m_input.getCols());
+    for(unsigned i = 0; i < m_input.getCols(); ++i)
+        for(unsigned j = 0; j < weights.getCols(); ++j)
         {
-            double oldDeltaWeight = deltaWeights.getValue(j, i);
-            double newDeltaWeight = eta * prevOutputVals.getValue(0, j) * m_gradients.getValue(0, i) + alpha * oldDeltaWeight;
-            deltaWeights.getValue(j, i) = newDeltaWeight;
-            weights.getValue(j, i) += newDeltaWeight;
+            weight_gradient.getValue(i, j) = outputGradient.getValue(0, j) * m_input.getValue(0, i);
+            input_gradient.getValue(0, i) += weights.getValue(i, j) * outputGradient.getValue(0, j) * activationFunctionDerivative(m_input.getValue(0, i));
         }
-    }
-}
+    for(unsigned i = 0; i < m_input.getCols(); ++i)
+        for(unsigned j = 0; j < weights.getCols(); ++j)
+        {
+            deltaWeights.getValue(i, j) = weight_gradient.getValue(i, j) * eta + deltaWeights.getValue(i, j) * alpha;
+            weights.getValue(i, j) -= deltaWeights.getValue(i, j);
+        }
 
-double FullyConnLayer::sumDerivativeOWeight(unsigned j, Matrix &nextWeights, Matrix &nextGradients)
-{
-    double sum = 0.0;
-    for(unsigned i = 0; i < nextWeights.getCols(); ++i)
-    {
-        sum += nextWeights.getValue(j, i) * nextGradients.getValue(0, i);
-    }
-    return sum;
-}
-
-void FullyConnLayer::calcHiddenGradients(Matrix &nextWeights, Matrix &nextGradients)
-{
-    for(unsigned i = 0; i < m_gradients.getCols(); ++i)
-    {
-        double dow = sumDerivativeOWeight(i, nextWeights, nextGradients);
-        m_gradients.getValue(0, i) = dow * activationFunctionDerivative(m_outputVal.getValue(0, i));
-    }
-}
-
-void FullyConnLayer::calcOutputGradients(Matrix targetVals)
-{
-    for(unsigned i = 0; i < m_outputVal.getCols(); ++i)
-    {
-        double delta = targetVals.getValue(0, i) - m_outputVal.getValue(0, i);
-        m_gradients.getValue(0, i) = delta * activationFunctionDerivative(m_outputVal.getValue(0, i));
-    }
+    return input_gradient;
 }
 
 Matrix FullyConnLayer::feedForward(Matrix input)
 {
     input.getFlatted().push_back(1.0);
     input.getCols() += 1;
-    m_outputVal = input.dot(weights);
+    m_input = input;
+    m_output = input.dot(weights);
     if(activationType == ActivationType::SoftMax)
     {
+        maxC = -1000000000000;
+        for(unsigned i = 0; i < m_output.getFlatted().size(); ++i)
+        {
+            if(maxC < m_output.getFlatted()[i]) maxC = m_output.getFlatted()[i];
+        }
         sumE_z = 0.0;
-        for(unsigned i = 0; i < m_outputVal.getFlatted().size(); ++i)
+        for(unsigned i = 0; i < m_output.getFlatted().size(); ++i)
         {
-            sumE_z += exp(m_outputVal.getFlatted()[i]);
+            sumE_z += exp(m_output.getFlatted()[i] - maxC);
         }
     }
-    for(unsigned i = 0; i < m_outputVal.getRows(); ++i)
-    {
-        for(unsigned j = 0; j < m_outputVal.getCols(); ++j)
-        {
-            double &tmp = m_outputVal.getValue(i, j);
-            tmp = activationFunction(tmp);
-        }
-    }
-    return m_outputVal;
+    for(unsigned i = 0; i < m_output.getRows(); ++i)
+        for(unsigned j = 0; j < m_output.getCols(); ++j)
+            m_output.getValue(i, j) = activationFunction(m_output.getValue(i, j));
+    
+    return m_output;
 }
 
 FullyConnLayer::FullyConnLayer(unsigned inpNeuronNum, unsigned neuronNum, ActivationType activation)
 {
     activationType = activation;
-    m_outputVal = Matrix(1, neuronNum);
+    m_output = Matrix(1, neuronNum);
     m_gradients = Matrix(1, neuronNum);
     createWeights(inpNeuronNum);
 }
@@ -120,7 +108,7 @@ FullyConnLayer::FullyConnLayer()
 
 void FullyConnLayer::createWeights(unsigned inpSize)
 {
-    Matrix tmp(inpSize + 1, m_outputVal.getCols());
+    Matrix tmp(inpSize + 1, m_output.getCols());
     weights = tmp;
     deltaWeights = tmp;
     for(unsigned i = 0; i < weights.getRows(); ++i)
@@ -139,7 +127,7 @@ double FullyConnLayer::sigmoid(double x)
 
 double FullyConnLayer::softmax(double x)
 {
-    return exp(x) / sumE_z;
+    return exp(x - maxC) / sumE_z;
 }
 
 double FullyConnLayer::activationFunction(double x)
@@ -193,4 +181,16 @@ double FullyConnLayer::activationFunctionDerivative(double x)
 		return 0.0;
 		break;
 	}
+}
+
+ofstream &operator<<(ofstream &out, FullyConnLayer &a)
+{
+    out << a.weights;
+    return out;
+}
+
+ifstream &operator>>(ifstream &in, FullyConnLayer &a)
+{
+    in >> a.weights;
+    return in;
 }

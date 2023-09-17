@@ -8,19 +8,22 @@ using namespace std;
 class Net
 {
 public:
-    Net();
+    Net(string save_file_name);
     void feedForward(Tensor inputVals);
-    void backProp(Matrix targetVals);
+    void backProp(Matrix targetVals, double learning_rate);
     double getRecentAverageError(void) const { return m_recentAverageError; }
     Matrix getOutputVals() {return m_outputVals;}
+    Tensor normalize(Tensor inputVals, double minRange, double maxRange);
     void calcError(Matrix inputVals);
+    void saveNet();
+    void loadNet();
     static Matrix flatten(Tensor a);
 private:
+    string save_file_name;
     unsigned inputDepth = 1;
     double m_error;
 	double m_recentAverageError;
 	static double m_recentAverageSmoothingFactor;
-    //vector<FullyConnLayer> m_layers;
     ConvolutionalLayer layer1;
     ConvolutionalLayer layer2;
     PoolingLayer layer3;
@@ -31,6 +34,18 @@ private:
 };
 
 double Net::m_recentAverageSmoothingFactor = 100.0;
+
+Tensor Net::normalize(Tensor inputVals, double minRange, double maxRange)
+{
+    for(unsigned i = 0; i < inputVals.size(); ++i)
+    {
+        for(unsigned j = 0; j < inputVals[i].getFlatted().size(); ++j)
+        {
+            inputVals[i].getFlatted()[j] = (inputVals[i].getFlatted()[j] + minRange) / (maxRange + minRange);
+        }
+    }
+    return inputVals;
+}
 
 Matrix Net::flatten(Tensor a)
 {
@@ -51,53 +66,15 @@ void Net::calcError(Matrix targetVals)
     m_error = 0.0;
     for(unsigned n = 0; n < m_outputVals.getCols(); ++n)
 	{
-		double delta = -(targetVals.getValue(0, n) * log(m_outputVals.getValue(0, n)) + (1.0 - targetVals.getValue(0, n)) * log(1.0 - m_outputVals.getValue(0, n)));
-		m_error += delta;// *delta;
+		double delta = - targetVals.getValue(0, n) * log(m_outputVals.getValue(0, n));
+		m_error += delta;
 	}
 	m_error /= m_outputVals.getCols();
-	//m_error = sqrt(m_error);
 
 	m_recentAverageError = 
 			(m_recentAverageError * m_recentAverageSmoothingFactor + m_error)
 			/ (m_recentAverageSmoothingFactor + 1.0);
 }
-#pragma region 
-/*void Net::feedForward(Matrix inputVals)
-{
-    assert(inputVals.getCols() == m_layers[0].getInputsNum());
-    m_outputVals = inputVals;
-    m_inputVals = inputVals;
-    for(unsigned layerNum = 0; layerNum < m_layers.size(); ++layerNum)
-    {
-        m_outputVals = m_layers[layerNum].feedForward(m_outputVals);
-    }
-}
-
-/*void Net::backProp(Matrix targetVals)
-{
-
-    m_layers.back().calcOutputGradients(targetVals);
-
-    for(int layerNum = m_layers.size() - 2; layerNum >= 0; --layerNum)
-    {
-        Matrix nextWeights = m_layers[layerNum + 1].getInputWeights();
-        Matrix nextGradients = m_layers[layerNum + 1].getInputGradients();
-        m_layers[layerNum].calcHiddenGradients(nextWeights, nextGradients);
-    }
-
-    for(int layerNum = m_layers.size() - 1; layerNum > 0; --layerNum)
-    {
-        Matrix tmp = m_layers[layerNum - 1].getOutputVals();
-        tmp.getFlatted().push_back(1.0);
-        tmp.getCols() += 1;
-        m_layers[layerNum].updateInpWeights(m_layers[layerNum - 1].getOutputVals());
-    }
-    Matrix tmp = m_inputVals;
-    tmp.getFlatted().push_back(1.0);
-    tmp.getCols() += 1;
-    m_layers[0].updateInpWeights(m_inputVals);
-}*/
-#pragma endregion
 
 void Net::feedForward(Tensor inputVals)
 {
@@ -109,27 +86,58 @@ void Net::feedForward(Tensor inputVals)
     output2 = layer4.feedForward(output2);
     output2 = layer5.feedForward(output2);
     m_outputVals = output2;
+    //saveNet();
 }
 
-void Net::backProp(Matrix targetVals)
+void Net::backProp(Matrix targetVals, double learning_rate)
 {
-    layer5.calcOutputGradients(targetVals);
-    layer4.calcHiddenGradients(layer5.getInputWeights(), layer5.getInputGradients());
-    layer3.calcPoolingGradient(layer4.getInputWeights(), layer4.getInputGradients());
-    layer2.getInputGradients() = layer3.getInputGradient();
-    layer1.calcInputGradients(layer2.getKernels(), layer2.getInputGradients(), 1);
-
-    layer5.updateInpWeights(layer4.getOutputVals());
-    layer4.updateInpWeights(flatten(layer3.getOutputVals()));
-    layer2.updateInpKernels(layer1.getOutputVals());
-    layer1.updateInpKernels(m_inputVals);
+    ConvolutionalLayer::eta = learning_rate;
+    FullyConnLayer::eta = learning_rate;
+    auto grad1 = layer5.calcOutputGradients(targetVals);
+    grad1 = layer4.backward(grad1);
+    auto grad2 = layer3.calcPoolingGradient(grad1);
+    grad2 = layer2.backward(grad2);
+    grad2 = layer1.backward(grad2);
 }
 
-Net::Net()
+Net::Net(string save_file_name)
 {
+    this->save_file_name = save_file_name;
     layer1 = ConvolutionalLayer(28, 28, 1, 32, 3, ActivationType::Sigmoid);
     layer2 = ConvolutionalLayer(28, 28, 32, 32, 3, ActivationType::Sigmoid);
     layer3 = PoolingLayer(28, 28, 14, 14, 32);
     layer4 = FullyConnLayer(6272, 128, ActivationType::Sigmoid);
     layer5 = FullyConnLayer(128, 10, ActivationType::SoftMax);
+    fstream tmp(save_file_name);
+    if(tmp.good())
+    {
+        loadNet();
+    }
+}
+
+void Net::saveNet()
+{
+    ofstream outStream;
+    outStream.open(save_file_name + ".layer5.txt", ios::out);
+    (outStream << layer5).close();
+    outStream.open(save_file_name + ".layer4.txt", ios::out);
+    (outStream << layer4).close();
+    outStream.open(save_file_name + ".layer2.txt", ios::out);
+    (outStream << layer2).close();
+    outStream.open(save_file_name + ".layer1.txt", ios::out);
+    (outStream << layer1).close();
+    
+}
+
+void Net::loadNet()
+{
+    ifstream inpStream;
+    inpStream.open(save_file_name + ".layer5.txt", ios::in);
+    (inpStream >> layer5).close();
+    inpStream.open(save_file_name + ".layer4.txt", ios::in);
+    (inpStream >> layer4).close();
+    inpStream.open(save_file_name + ".layer2.txt", ios::in);
+    (inpStream >> layer2).close();
+    inpStream.open(save_file_name + ".layer1.txt", ios::in);
+    (inpStream >> layer1).close();
 }

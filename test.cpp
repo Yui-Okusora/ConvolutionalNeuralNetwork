@@ -19,15 +19,16 @@ int main()
     Matrix b(vector<double>({2,3,4,5,6,7,8,9,4}),3,3);
     Matrix c(vector<double>({1}),1,1);
     Tensor d(1, a);
-    PoolingLayer layer(5, 5, 3, 3, 1);
-    cout<<endl;
-    a.print();
-    cout<<endl;
-    auto start = chrono::high_resolution_clock().now();
-    auto tmp = layer.feedForward(d);
-    auto end = chrono::high_resolution_clock().now();
-    cout<<chrono::duration(end - start).count()<<endl;
-    tmp[0].print();
-    layer.calcPoolingGradient(Tensor(1, b))[0].print();
+    Tensor e;
+    string filename = "testfile.txt";
+    ofstream f;
+    f.open(filename.c_str(), ios::out);
+    f << d;
+    f.close();
+    ifstream inpf;
+    inpf.open(filename.c_str(), ios::in);
+    inpf >> e;
+    inpf.close();
+    cout << e[0];
     return 0;
 }

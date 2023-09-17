@@ -12,6 +12,11 @@ public:
     unsigned &getRows() {return n_rows;}
     unsigned &getCols() {return n_columns;}
     void print();
+    friend ostream &operator<<(ostream &out, Matrix &a);
+    friend ofstream &operator<<(ofstream &out, Matrix &a);
+    friend ifstream &operator>>(ifstream &in, Matrix &a);
+    void printFlat(ofstream &f);
+    void read(ifstream &f);
     void copyVals(const Matrix &b);
     Matrix setRandomVals(double randVal(void));
     Matrix setMatrixVal(double x);
@@ -297,4 +302,43 @@ void Matrix::print()
         cout << setw(3) << m_values[n_rows * i + j] << " ";
         cout << endl;
     }
+}
+
+ostream &operator<<(ostream &out, Matrix &a)
+{
+    a.print();
+    return out;
+}
+
+ofstream &operator<<(ofstream &out, Matrix &a)
+{
+    a.printFlat(out);
+    return out;
+}
+
+ifstream &operator>>(ifstream &in, Matrix &a)
+{
+    a.read(in);
+    return in;
+}
+
+void Matrix::read(ifstream &f)
+{
+    f >> n_rows >> n_columns;
+    vector<double> inp;
+    double tmp;
+    for(unsigned i = 0; i < n_rows * n_columns; ++i)
+    {
+        f >> tmp;
+        inp.push_back(tmp);
+    }
+    m_values = inp;
+}
+
+void Matrix::printFlat(ofstream &f)
+{
+    f << n_rows << " " << n_columns << " ";
+    for(unsigned i = 0; i < n_rows * n_columns; ++i)
+        f << m_values[i] << " ";
+    f << endl;
 }

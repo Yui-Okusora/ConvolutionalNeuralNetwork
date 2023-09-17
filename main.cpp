@@ -30,22 +30,28 @@ double getLabel(Matrix a)
 
 int main()
 {
-	Net mynet;
+	Net mynet("mynet1");
 	auto mnist_data = mnist::read_dataset<vector, vector, double, uint8_t>(10000, 5);
-	for(unsigned epoch = 0; epoch < mnist_data.training_images.size(); ++epoch)
+	unsigned minibatch = 100;
+	for(unsigned lap = 0; lap < mnist_data.training_images.size() / minibatch; ++lap)
 	{
-		Matrix input(mnist_data.training_images[epoch],28, 28);
-		Matrix targetOutput = hotCodedOutput(mnist_data.training_labels[epoch]);
+		for(unsigned epoch = 0; epoch < 100; ++epoch)
+		{
+			Matrix input(mnist_data.training_images[lap * minibatch + epoch],28, 28);
+			Matrix targetOutput = hotCodedOutput(mnist_data.training_labels[lap * minibatch + epoch]);
 
-		cout << "Epoch: " << epoch + 1 << endl;
-		mynet.feedForward(Tensor(1, input));
-		cout << "Target: " << uchar2dou(mnist_data.training_labels[epoch]) << endl;
-		cout << "Output: " << getLabel(mynet.getOutputVals()) << endl;
+			cout << "Epoch: " << lap * minibatch + epoch + 1 << endl;
+			mynet.feedForward(mynet.normalize(Tensor(1, input), 0, 255));
+			cout << "Target: " << uchar2dou(mnist_data.training_labels[epoch]) << endl;
+			cout << "Output: " << getLabel(mynet.getOutputVals()) << endl;
 
-		mynet.backProp(targetOutput);
-		mynet.calcError(targetOutput);
-		cout << "Error: " << mynet.getRecentAverageError() << endl;
-		cout << endl;
+			mynet.backProp(targetOutput, 0.1);
+			mynet.calcError(targetOutput);
+			cout << "Error: " << mynet.getRecentAverageError() << endl;
+			cout << endl;
+		}
+		mynet.saveNet();
 	}
+	
 	return 0;
 }

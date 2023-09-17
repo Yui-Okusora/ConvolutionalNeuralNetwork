@@ -9,6 +9,7 @@ public:
     PoolingLayer(unsigned InputHeight, unsigned InputWidth, unsigned OutputHeight, unsigned OutputWidth, unsigned InputChannels);
     Tensor feedForward(Tensor input);
     Tensor calcPoolingGradient(Tensor nextGradients);
+    Tensor calcPoolingGradient(Matrix outputGradient);
     Tensor calcPoolingGradient(Matrix &nextWeights, Matrix &nextGradients);
     Tensor Matrix2Tensor(Matrix input);
     Tensor getInputGradient() {return m_gradients;}
@@ -124,6 +125,11 @@ Tensor PoolingLayer::calcPoolingGradient(Tensor nextGradients)
         m_gradients[channel] = Matrix(m_gradients[channel].submat(0, 0, outHeight, outWidth).getFlatted(), outHeight, outWidth);
     }
     return m_gradients;
+}
+
+Tensor PoolingLayer::calcPoolingGradient(Matrix outputGradient)
+{
+    return calcPoolingGradient(Matrix2Tensor(outputGradient));
 }
 
 Tensor PoolingLayer::calcPoolingGradient(Matrix &nextWeights, Matrix &nextGradients)

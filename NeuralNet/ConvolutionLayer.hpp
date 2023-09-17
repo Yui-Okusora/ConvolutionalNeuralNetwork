@@ -3,30 +3,25 @@
 #include "Tensor.hpp"
 using namespace std;
 
-class ConvolutionalLayer;
-
-typedef vector<ConvolutionalLayer> ConvLayer;
-
 class ConvolutionalLayer
 {
 public:
 	ConvolutionalLayer();
 	ConvolutionalLayer(unsigned InpHeight, unsigned InpWidth, unsigned InpDepth, unsigned OutNum, unsigned kernelSize, ActivationType Activation);
-    Tensor calcInputGradients(vector<Tensor> nextKernels, Tensor nextGradients, unsigned nextStride);
 	Tensor feedForward(Tensor &input);
-	vector<Tensor> getKernels() {return kernels;}
-	Tensor &getInputGradients() {return m_gradients;}
-	Tensor getOutputVals() {return m_outputVal;}
-	void updateInpKernels(Tensor prevOutputVals);
+	Tensor backward(Tensor outputGradient);
 	void createKernel(unsigned size);
-private:
-    static double eta; // [0.0...1.0] overall net training rate
+	friend ofstream &operator<<(ofstream &out, ConvolutionalLayer &a);
+	friend ifstream &operator>>(ifstream &in, ConvolutionalLayer &a);
+	static double eta; // [0.0...1.0] overall net training rate
 	static double alpha; // [0.0...n] multiplier of last weight change [momentum]
 	static double reluParam;
+private:
+    
 	double activationFunction(double x);
 	double activationFunctionDerivative(double x);
 	static double sigmoid(double x);
-	static double randomWeight(void) { return rand() / double(RAND_MAX); }
+	static double randomWeight(void) { return rand() / double(RAND_MAX) / 1.0; }
     Tensor m_outputVal;
 	Tensor m_inputVal;
     vector<Tensor> kernels;
@@ -38,57 +33,45 @@ private:
     unsigned padding = 1;
 	unsigned n_depth; // j
 	unsigned kernelsNum; // i
+	unsigned kernelSize = 3;
 	unsigned inpHeight;
 	unsigned inpWidth;
 	ActivationType activationType;
 };
 
-double ConvolutionalLayer::eta = 0.15;
-double ConvolutionalLayer::alpha = 0.5;
+double ConvolutionalLayer::eta = 0.13887;
+double ConvolutionalLayer::alpha = 0;
 double ConvolutionalLayer::reluParam = 0.1;
 
-void ConvolutionalLayer::updateInpKernels(Tensor prevOutputVals)
+Tensor ConvolutionalLayer::backward(Tensor outputGradient)
 {
-	for(unsigned kernelNum = 0; kernelNum < kernelsNum; ++kernelNum)
+	vector<Tensor> kernels_gradient(kernelsNum, Tensor(kernelSize, kernelSize, n_depth));
+	Tensor input_gradient(inpHeight, inpWidth, kernelsNum);
+
+	for(unsigned i = 0; i < kernelsNum; ++i)
 	{
-		Matrix &bias = biases[kernelNum];
-		Matrix biasesGradients = m_gradients[kernelNum];
-		Matrix oldDeltaBiases = deltaBiases[kernelNum];
-		Matrix newDeltaBiases = biasesGradients. multiply( eta ). add( oldDeltaBiases. multiply( alpha ) );
-		bias.copyVals(bias.add(newDeltaBiases));
-		for(unsigned depth = 0; depth < n_depth; ++depth)
+		for(unsigned j = 0; j < n_depth; ++j)
 		{
-			Matrix &kernel = kernels[kernelNum][depth];
-			Matrix input = prevOutputVals[depth];
-			Matrix kernelsGradients = input.correlate(biasesGradients, padding, stride);
-			Matrix oldDeltaKernels = deltaKernels[kernelNum][depth];
-			Matrix newDeltaKernels = kernelsGradients. multiply( eta ). add( oldDeltaKernels. multiply( alpha ) );
-			kernel.copyVals(kernel.add(newDeltaKernels));
+			Matrix activeFuncDeriv(m_inputVal[j]);
+			for(unsigned k = 0; k < activeFuncDeriv.getFlatted().size(); ++k)
+				activeFuncDeriv.getFlatted()[k] = activationFunctionDerivative(activeFuncDeriv.getFlatted()[k]);
+
+			kernels_gradient[i][j] = m_inputVal[j].correlate(outputGradient[i], padding, stride);
+			Matrix tmp = outputGradient[i].convolute(kernels[i][j], padding, stride);
+			input_gradient[j] = input_gradient[j].add(tmp.multiply(activeFuncDeriv));
 		}
 	}
-}
-
-Tensor ConvolutionalLayer::calcInputGradients(vector<Tensor> nextKernels, Tensor nextGradients, unsigned nextStride)
-{
-	for(unsigned depth = 0; depth < n_depth; ++depth)
+	for(unsigned i = 0; i < kernelsNum; ++i)
 	{
-		Matrix sum(m_outputVal[0].getRows(), m_outputVal[0].getCols());
-		for(unsigned kernelNum = 0; kernelNum < kernelsNum; ++kernelNum)
+		for(unsigned j = 0; j < n_depth; ++j)
 		{
-			Matrix tmp = nextGradients[kernelNum].convolute(nextKernels[kernelNum][depth], padding, nextStride);
-			sum = sum.add(tmp);
+			deltaKernels[i][j] = kernels_gradient[i][j].multiply(eta).add(deltaKernels[i][j].multiply(alpha));
+			kernels[i][j] = kernels[i][j].subtr(deltaKernels[i][j]);
 		}
-
-		Matrix activeFuncDeriv(m_outputVal[depth]);
-		for(unsigned i = 0; i < activeFuncDeriv.getFlatted().size(); ++i)
-		{
-			double &tmp = activeFuncDeriv.getFlatted()[i];
-			tmp = activationFunctionDerivative(tmp);
-		}
-
-		m_gradients[depth] = sum.multiply(activeFuncDeriv);
+		deltaBiases[i] = outputGradient[i].multiply(eta).add(deltaBiases[i].multiply(alpha));
+		biases[i] = biases[i].subtr(deltaBiases[i]);
 	}
-	return m_gradients;
+	return input_gradient;
 }
 
 Tensor ConvolutionalLayer::feedForward(Tensor &input)
@@ -104,7 +87,7 @@ Tensor ConvolutionalLayer::feedForward(Tensor &input)
 		//Zi = Bi
 		Matrix sum(biases[kernelNum]);
 
-		sum = sum.add(input.correlate(kernel, padding, stride));
+		sum = sum.add(input.correlate(kernel, padding, stride).sum());
 
 		//Yi = activate(Zi)
 		for(unsigned i = 0; i < sum.getFlatted().size(); ++i)
@@ -117,7 +100,7 @@ Tensor ConvolutionalLayer::feedForward(Tensor &input)
 		assert(m_outputVal[kernelNum].getRows() == sum.getRows());
 		m_outputVal[kernelNum] = sum;
 	}
-	
+	m_inputVal = input;
 	return m_outputVal;
 }
 
@@ -129,6 +112,7 @@ ConvolutionalLayer::ConvolutionalLayer(unsigned InpHeight, unsigned InpWidth, un
 	kernelsNum = OutNum;
 	inpHeight = InpHeight;
 	inpWidth = InpWidth;
+	kernelSize = KernelSize;
 	createKernel(KernelSize);
 	Matrix tmp((InpHeight - KernelSize + 2 * padding) / stride + 1, (InpWidth - KernelSize + 2 * padding) / stride + 1);
 
@@ -151,8 +135,13 @@ void ConvolutionalLayer::createKernel(unsigned size)
 {
 	for(unsigned kernelNum = 0; kernelNum < kernelsNum; ++kernelNum)
 	{
-		deltaKernels.push_back(Tensor(n_depth, Matrix(size, size)));
-		kernels.push_back(Tensor(n_depth, Matrix(size, size).setRandomVals(randomWeight)));
+		Tensor tmp(n_depth, Matrix(size, size));
+		deltaKernels.push_back(tmp);
+		for(unsigned i = 0; i < n_depth; ++i)
+		{
+			tmp[i] = tmp[i].setRandomVals(randomWeight);
+		}
+		kernels.push_back(tmp);
 	}
 }
 
@@ -206,4 +195,23 @@ double ConvolutionalLayer::activationFunctionDerivative(double x)
 		return 0.0;
 		break;
 	}
+}
+
+ofstream &operator<<(ofstream &out, ConvolutionalLayer &a)
+{
+	//out << a.kernelsNum << endl;
+	for(unsigned i = 0; i < a.kernelsNum; ++i)
+		out << a.kernels[i];
+	for(unsigned i = 0; i < a.kernelsNum; ++i)
+		out << a.biases[i];
+	return out;
+}
+
+ifstream &operator>>(ifstream &in, ConvolutionalLayer &a)
+{
+	for(unsigned i = 0; i < a.kernelsNum; ++i)
+		in >> a.kernels[i];
+	for(unsigned i = 0; i < a.kernelsNum; ++i)
+		in >> a.biases[i];
+	return in;
 }
